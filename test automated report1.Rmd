@@ -1,0 +1,60 @@
+---
+title: "test fingertips markdown"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(fingertipsR)
+library(fingertipscharts)
+library(dplyr)
+library(plotly)
+library(glue)
+library(httr)
+
+wanted_indicators <- c(93085, 92517, 93014, 90366, 90282, 22401, 40401, 30314)
+
+# Get data for Bolton, GM combined authority and England 
+fingertips_data <- fingertips_data(IndicatorID = wanted_indicators, ProfileID = 19, AreaTypeID = 102,
+                             ParentAreaTypeID = 126, rank = TRUE) %>%
+  filter(AreaCode %in% c("E08000001", "E47000001", "E92000001"))
+
+  selected_data <- fingertips_data %>%
+    filter(IndicatorID== 22401, Sex == "Persons", Age == "65+ yrs", AreaCode %in% c("E08000001", "E47000001")) %>%
+    group_by(AreaName) 
+```
+
+## Test markdown document
+
+In the latest year `r selected_data[selected_data$AreaName == "Bolton" & selected_data$TimeperiodSortable == max(selected_data$TimeperiodSortable),"Timeperiod"]`, Bolton had `r selected_data[selected_data$AreaName == "Bolton" & selected_data$TimeperiodSortable == max(selected_data$TimeperiodSortable),"Value"]` emergency hospital admissions due to falls among those aged 65+.  
+
+```{r plotly_chart}
+# plotly
+
+# working version  
+  pal <- c("red", "green", "black")
+  pal <- setNames(pal, c("Worse",  "Better", "NA"))
+  myhover <- glue("{selected_data$AreaName}<br>{selected_data$Timeperiod} 
+                 {prettyNum(round(selected_data$Value, 1), big.mark = ",")}")  
+  
+  plot_ly(data = selected_data, x = ~Timeperiod, y = ~Value, 
+          color = ~ComparedtoCombinedauthoritiesvalueorpercentiles, colors = pal,
+          showlegend = FALSE,
+          error_y = ~list(type = "data", symmetric = FALSE,
+                          array = c(UpperCI95.0limit-Value),
+                          arrayminus = c(Value - LowerCI95.0limit),
+                          color = "black",
+                          line = list(width = 0.5, color = "red"))
+  ) %>%
+    add_trace(type='scatter',
+              mode='lines+markers',
+              marker = list(size = 11, line = list(color = "black", width = 1.5)),
+              line = list(color = "black", width = 0.5),
+              hoverinfo = "text",
+              text = ~myhover
+    ) %>%
+    layout(title = glue("<b>{selected_data$IndicatorName[1]}</b>"),
+           xaxis = list(title = "<b>Time period</b>"),
+           yaxis = list(title = "<b>Value</b>"))
+```
+
