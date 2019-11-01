@@ -28,7 +28,7 @@ fingertips_data <- fingertips_data(IndicatorID = wanted_indicators, ProfileID = 
 
 In the latest year `r selected_data[selected_data$AreaName == "Bolton" & selected_data$TimeperiodSortable == max(selected_data$TimeperiodSortable),"Timeperiod"]`, Bolton had `r selected_data[selected_data$AreaName == "Bolton" & selected_data$TimeperiodSortable == max(selected_data$TimeperiodSortable),"Value"]` emergency hospital admissions due to falls among those aged 65+.  
 
-```{r plotly_chart}
+```{r plotly_chart, echo = FALSE, message = FALSE, warning=FALSE}
 # plotly
 
 # working version  
