@@ -1,0 +1,155 @@
+---
+title: "Bolton health and wellbeing overview - test in markdown"
+output: 
+   bookdown::word_document2:
+      reference_docx: word-styles-reference-01.docx
+      toc: true
+      fig_caption: yes
+always_allow_html: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(lubridate)
+library(nomisr)
+library(dplyr)
+library(janitor)
+library(ggplot2)
+library(forcats)
+library(stringr)
+library(plotly)
+library(glue)
+library(fingertipsR)
+library(tidyr)
+
+```
+
+```{r datasets, include=FALSE}
+# bolton population latest, all age, measures = number (not %)  
+  total_pop <- nomis_get_data(id = "NM_31_1", date = "latest", 
+                               geography = 1816133652, sex = 7, age = 0, measures = 20100)
+
+# data for pop pyramid
+    # get data
+    # bolton & england latest, 5 year age bands, % (not number)  
+      # bolton = 1816133652
+      # england = 2092957699
+      age_breakdown <- nomis_get_data(id = "NM_31_1", date = "latest", 
+                                   geography = c(1816133652, 2092957699), sex = c(5, 6), measures = 20301) %>%
+        clean_names() %>%
+        filter(age_code != 0) # excludes all ages
+  
+    # prepare data
+      age_breakdown2 <- age_breakdown %>%
+        # reduce number of columns
+          select(geography_name, sex_name, age_name, obs_value) %>%
+        # change name label to be shorter
+          dplyr::mutate(age_name = str_replace(age_name, "Aged ", ""),
+                        age_name = str_replace(age_name, " years", ""),
+                        age_name = str_replace(age_name, " year", ""),
+                        age_name = as.factor(age_name),
+                        age_name = fct_relevel(age_name, "under 1", "1 - 4", "5 - 9", "10 - 14", "15 - 19", 
+                                               "20 - 24", "25 - 29", "30 - 34", "35 - 39", "40 - 44",
+                                               "45 - 49", "50 - 54", "55 - 59", "60 - 64", "65 - 69", 
+                                               "70 - 74", "75 - 79", "80 - 84", "85 and over"),
+                        ) %>%
+        filter(!age_name %in% c("0 - 15", "16 - 59/64", "16 - 64", "18 - 24", "65 and over")) %>%
+        # drop extra levels that were filtered out above
+          mutate(age_name = fct_drop(age_name))
+
+# GP registered population
+    gp_reg_pop <- fingertips_data(IndicatorID = 114, # 114 = QOF Total List Size
+      AreaCode = "E38000016", # Bolton CCG
+      ProfileID = 21, # 165 = CCGs unchanged plus new 2019
+      AreaTypeID = 165) %>% # 165 = CCGs unchanged plus new 2019
+    filter(TimeperiodSortable == max(TimeperiodSortable)) # most recent date
+    
+# age group comparisons 
+    age_breakdown3 <- age_breakdown2 %>%
+         # make age categories bigger to meaningful breaks
+         mutate(age_name2 = fct_collapse(age_name, 
+                                  "Pre-school age (0-4)" = c("under 1", "1 - 4"),
+                                  "Primary school age (5-9)" = c("5 - 9"),
+                                  "Secondary school age (10-19)" = c("10 - 14", "15 - 19"),
+                                  "Younger adult age (20-39)" = c("20 - 24", "25 - 29", "30 - 34", "35 - 39"), 
+                                  "Older working age (40-64)" = c("40 - 44", "45 - 49", "50 - 54", "55 - 59", "60 - 64"),
+                                  "Early post retirement age (65-74)" = c("65 - 69", "70 - 74"),
+                                  "Older retirement age (75+)" = c("75 - 79", "80 - 84", "85 and over")
+                                  )) %>%
+  # sum by new age cateogries
+  group_by(geography_name, sex_name, age_name2) %>%
+  summarise(obs_value2 = sum(obs_value)) %>%
+  # put Bolton & England in different cols to compare easier
+  pivot_wider(id_cols = c(sex_name, age_name2), names_from = geography_name, values_from = obs_value2) %>%
+  mutate(diff = Bolton-England,
+         diff_abs = abs(England-Bolton)) %>%
+  arrange(desc(diff_abs)) %>%
+  # remove rows where difference is less than 1%
+  mutate(big_diff = diff_abs>=1)
+
+```
+
+Date: `r format(today(), "%x")`
+
+######### .
+
+# Introduction
+Bolton has an ambitious Vision for 2030: 
+In 2030, we want Bolton to be a vibrant place build on strong cohesive communities, successful businesses and healthy, engaged residents. It will be a welcoming place where people choose to study, work, invest and put down roots.
+To support the achievement of the Vision, the council and its partners will need to ensure that strategies and decision making are informed by shared and robust insight and intelligence on the existing strengths and challenges, and evidence of what will work to deliver improved outcomes for residents and the town.  
+
+Bolton’s Joint Strategic Needs Assessment (JSNA) is a set of local arrangements that create a shared picture of health and wellbeing of Bolton residents, and the local factors acting to influence health of people in the borough. 
+JSNA activities and products support a focus on improving outcomes for everyone across the short, medium and long term. The process is distinct from performance management.
+This document draws together a selection of key population health indicators from a range of sources to give an overview of the health and wellbeing of Bolton residents. 
+
+# Key messages 
+*	Bolton’s resident population is `r prettyNum(total_pop$OBS_VALUE, big.mark = ",")` (mid year `r total_pop$DATE_NAME`), but it has a `r ifelse(age_breakdown3$diff[1]>0, "higher", "lower")` GP registered population
+*	The resident population in Bolton has increased by an estimated **6%** in the last 10 years, this is typical for Greater Manchester but some way behind Manchester and Salford. 
+*	The health of the people of Bolton is worse than that seen across England as a whole. This is seen in measures of life expectancy, and in death rates for common causes amongst those aged under 75. 
+*	Bolton experiences a number of challenges in relation to health related behaviours and the social and physical environment. 
+*	There are inequalities across Bolton with areas of affluence as well as deprivation, and similarly inequalities in health outcomes.
+*	Bolton also has many assets, with a thriving voluntary sector and access to greenspace which is valued by many. 
+*	Bolton is not alone in facing these challenges and opportunities, and in many ways shows a picture typical of the North West region and Greater Manchester. 
+
+# Our people
+
+## Population size and structure
+Bolton has a resident population of `r prettyNum(total_pop$OBS_VALUE, big.mark = ",")` (mid year `r total_pop$DATE_NAME`), whereas the GP registered population is `r ifelse(gp_reg_pop$Value > total_pop$OBS_VALUE, "higher", "lower")` at `r prettyNum(gp_reg_pop$Value, big.mark = ",")` (`r gp_reg_pop$Timeperiod`). Bolton has `r ifelse(age_breakdown3$diff[1]>0, "more", "fewer")` `r str_to_lower(age_breakdown3$sex_name[1])`s of `r str_to_lower(age_breakdown3$age_name2[1])` than England, `r ifelse(age_breakdown3$diff[2]>0, "more", "fewer")` `r str_to_lower(age_breakdown3$sex_name[2])`s of `r str_to_lower(age_breakdown3$age_name2[2])`, and `r ifelse(age_breakdown3$diff[3]>0, "more", "fewer")` `r str_to_lower(age_breakdown3$sex_name[3])`s of `r str_to_lower(age_breakdown3$age_name2[3])`. Figure \@ref(fig:ggplot-pop-pyramid) shows Bolton’s population distribution by 5-year age bands and gender compared with England. 
+
+
+``` {r ggplot-pop-pyramid, fig.cap="Bolton population compared to England", echo = FALSE}
+
+# code chunk name doesn't like underscores or the caption numbering won't work properly
+
+       ggplot() + 
+    # swap x & y axes
+      coord_flip() + 
+    # columns - Bolton 
+      geom_col(data = age_breakdown2[age_breakdown2$geography_name == "Bolton",],
+        aes(x = age_name, y = ifelse(sex_name == "Male", -obs_value, obs_value), fill = sex_name)) +
+    # line - England
+      geom_line(data = age_breakdown2[age_breakdown2$geography_name == "England",], 
+                aes(x = age_name, 
+                    y = ifelse(sex_name == "Male", -obs_value, obs_value), 
+                    group = sex_name, colour = sex_name),
+                size = 1) +
+    # sort out x axis (rotated y) 
+        # put main breaks (for tick mark labels) at chosen points 
+        scale_y_continuous(breaks = c(-10, -8, -6, -4, -2, 0, 2, 4, 6, 8, 10),
+         # percent is e.g. 20 for 20% not 0.2 
+         # abs ie. absolute takes away +- symbol
+         # adds % symbol
+            labels = function(x) paste0(abs(x),"%")) +
+      # change label of key
+    # axis labels
+      labs(x = "Age group", y = "Proportion of total" ) + 
+    theme_minimal() +
+    scale_colour_manual(name = "England", 
+                        values = c("#99a89e", # f - Bolton brand darker grey
+                                   "#FFB300")) + # m - Bolton brand yellow
+    scale_fill_manual(name = "Bolton",
+                      values = c("#FFB300", # f - Bolton brand yellow
+                                 "#99a89e"))  # m - Bolton brand grey  
+
+```
+
